@@ -1,0 +1,43 @@
+1/21/26 summary - Ari Ginsparg
+This text document has notes on the creation of the glycine cage for why and how it was made. This was made in conjunction with a PDB for pth2r, 7F16.
+The following files correspond to files of interest made during this process:
+upper_receptor_cage_session_v2.pse - Pymol session containing files and structures used to make the cage, which was exported out.
+receptor_with_glycap_cage_manual_chain_a.pdb - PDB file of pth2r with the peptide and extra chains removed, with the cage added. All residues are chain A, and this file can be used as a Rosetta input.
+4bar_glycine_cage_resi_900_933.pdb - Extracted 4 parallel chains (bars) for the glycine cage in a semicircle layout. All residues have unique indices from 900-933 (less likely to share indices with a new target receptor), and can be maually added/modified to another receptor with surface binding. All residues are in chain A.
+
+The purpose of this glycine cage (or a cage in general) is to help close off a surface-exposed region of a receptor, which REAL-M may get stuck evaluating a ton of placements since placements can poke far out towards the surface without being culled by clashes. As such, I did this method outside of Rosetta (to not have to touch and update the code/container) to create a wall/cage that creates a clashable object a reasonable distance from the pocket that can help make surface discovery more feasible.
+
+WMaking the cage (extra help from chatgpt can be found in this exchange: https://chatgpt.com/c/696a9373-3b5c-8328-a7fd-8a0cdeb42e59):
+Overall, the goal was to add additional atoms to the initial receptor pose to act as a barrier that placed ligands could clash against if they stray too far from the desired binding site. For easy visualization and editing, I opted to perform this operation in the Pymol GUI. In discussion with chatgpt for what could be feasibly accomplished, there were ideas to add virtual atoms, a grid of individual atoms, or addition of entire residues or residue chains. For the sake of not wanting to deal with having to register loose/virtual atoms as additional molecules, I opted to go with adding residue chains. Further, the decision was made to use glycine to make the chains. Glycine is optimal due to its absence of a side chain, which means it is an easier shape to work with and motifs can not be attempted to be collected off of it by REAL-M.
+
+To start, an initial chain of 8 glycine residues for a new object named "cap" was generated using the following pymol command:
+fab GGGGGGGG, cap
+
+In this case, the chain was manually moved and rotated using Pymol edit mode to a location where it was touching the surface-facing section of the pth2 protein at the "upper" section of the receptor and peptide (the glycine chain ran in line roughly with residues 17-34 of the pth2 peptide in 7F16).
+
+Copies of the "cap" chain were made using the create command, making additional chains named "cap2", "cap3", and "cap4". Example create command to make cap2
+create cap2, cap
+
+The other cap chains were also manually moved to create the desiged cage shape. Clashing with points on the pth2r backbone was considered acceptable and has no apparent impact on REAL-M operations.
+
+One large caveat at this point is that the copied cap* chains all use the same indexing. Rosetta can work with this, but not well, and essentially just takes 1 atom of a given name per residue at an index, and so only one chain survived Rosetta in this state. I will discuss how this was fixed later.
+
+At this stage, once the cap chains were laid out in a satisfactory layout, the empty receptor and the cap chains were each given their own chain. The receptor was given chain A, and the caps given chain IDs W,X,Y,Z. The caps were given different unique chains for downstream manual editing. The alter command was used to change the chain ID for each object, which will be passed down. The following commands were used:
+alter 7F16_receptor_only, chain='A'
+alter cap,  chain='X'
+alter cap2, chain='Y'
+alter cap3, chain='Z'
+alter cap4, chain='W'
+
+Next, all of the objects were copied and condensed into a new single object for easy modification and saving purpose, using the create command again. A wildcard was used to call all cap chains, as the following command to craete teh condensed object "receptor_capped":
+create receptor_capped, protein or cap*
+
+From this point, the receptor_capped object was exported as a PDB using file>export molecule>save molecule (use receptor_capped as the selection and keep all other default options)>save as PDB
+
+At this point, the residues in the 4 cap chains still had the same indices and are in chains W-Z, which both work but do not behave well with REAL-M. There are ways to make these chain A with unique residues, but I had difficulty accomplishing this in pymol and opted to do this manually in a text editor. By making each cap a unique chain, each cap peptide was listed in order (otherwise atoms from the same index would have been mixed up in residue order and a huge pain to untangle in a text editor). Since each cap was its own chain, there was a "TER" line separating each chain. Each TER line was removed except for a final TER for what would become chain A that contains everything. Next, the chain ID of each residue was manually changed from W-Z to A, such as the following:
+"ATOM   3260 3HA  GLY W   1     100.898 108.584 167.918  0.00  0.00           H" -> "ATOM   3260 3HA  GLY A   1     100.898 108.584 167.918  0.00  0.00           H"
+
+Since the chains all use the same residue indexing of 1-8, the residue indices for EACH ATOM was manually changed to a new index. For the purpose of being able to try to easily reuse this cage by adding it to other receptors, indices 900-933 were used for each unique GLY in the 4 caps, under the assumption that the receptor would not use these indices. In the event that a target residue does use these indices, then the cage or receptor residue indices should be changed so they do not overlap. An example of changing the residue index from 1 to 900:
+"ATOM   3260 3HA  GLY A   1     100.898 108.584 167.918  0.00  0.00           H" -> "ATOM   3260 3HA  GLY A 900     100.898 108.584 167.918  0.00  0.00           H"
+
+At this point, the cage file can be appended to further receptors. This can be done via text by adding the cage file contents to a receptor pdb file, or by opening the cage and receptor in pymol and saving them together. It would be recommended add in pymol, as the cage will almost certainly need to be moved as well.
